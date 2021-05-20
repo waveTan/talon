@@ -28,6 +28,6 @@
   .app {
     width: 100%;
     height: 100%;
-    background: url("./assets/img/bg.jpg");
+    background: url("assets/imges/bg.jpg");
   }
 </style>

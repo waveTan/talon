@@ -6,22 +6,38 @@
              background-color="#3A4BE1"
              text-color="#fff"
              active-text-color="#ffd04b">
-      <el-menu-item index="assets">资产</el-menu-item>
-      <el-menu-item index="trading">交易</el-menu-item>
-      <el-menu-item index="liquidity">流动性</el-menu-item>
-      <el-menu-item index="farm">Farm</el-menu-item>
-      <el-menu-item index="info">Info</el-menu-item>
+      <!--  <el-menu-item index="assets">资产</el-menu-item>
+        <el-menu-item index="trading">交易</el-menu-item>
+        <el-menu-item index="liquidity">流动性</el-menu-item>
+        <el-menu-item index="farm">Farm</el-menu-item>
+        <el-menu-item index="info">Info</el-menu-item>-->
     </el-menu>
     <div class="fr account">
-      ETH
-      <div class="fr address">0x9f...565468</div>
+      <!--<i class="el-icon-s-finance"></i>-->
+      <div class="connection" v-if="!account" @click="chooseWallet">连接钱包</div>
+      <div class="fr address" v-else>{{superLong(account,5)}}</div>
     </div>
     <div class="clear"></div>
+
+    <el-dialog title="Connect to a wallet" custom-class="connect-dialog" width="420px" v-model="walletDialog">
+      <div class="list">
+        <div class="lis" @click="connectTo('MetaMast')">
+          <span>MetaMast</span>
+          <img style="width: 42px;" src="./../assets/img/nabox.svg"/>
+        </div>
+        <div class="lis lis-d" @click="connectTo('Nabox')">
+          <span>Nabox</span>
+          <img src="./../assets/img/walletconnect-logo.svg"/>
+        </div>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
 <script lang="ts">
   import {ref, defineComponent} from 'vue'
+  //import {superLong} from './../../utils/utils.js'
+  import {superLong} from "../api/util";
 
   export default defineComponent({
     name: 'Header',
@@ -37,12 +53,75 @@
     },
     data() {
       return {
+        account: '',
         activeIndex: 'home',
+        walletDialog: false,
       };
     },
+    mounted() {
+      this.metamask = window.ethereum;
+      if (this.metamask) {
+        this.account = window.ethereum.selectedAddress;
+
+        /* this.address = this.metamask.selectedAddress;
+         this.listenAccountChange();
+         this.listenNetworkChange()*/
+      } else {
+        this.hasMetaMask = false
+      }
+    },
     methods: {
+
+      /**
+       * @disc: 导航跳转
+       * @params:
+       * @date: 2021-05-18 16:40
+       * @author: Wave
+       */
       handleSelect(key) {
         this.toUrl(key)
+      },
+
+      superLong(str, len = 9) {
+        return superLong(str, len);
+      },
+
+      //连接钱包
+      chooseWallet() {
+        this.walletDialog = true
+      },
+
+      /**
+       * @disc: 连接到插件
+       * @params: wallet name
+       * @date: 2021-03-10 13:52
+       * @author: Wave
+       */
+      connectTo(walletName) {
+        console.log(walletName);
+        if (walletName === 'MetaMast') {
+          this.getAccount();
+        }
+      },
+
+      //连接metamask
+      async getAccount() {
+        if (window.ethereum) {
+          try {
+            await window.ethereum.request({method: 'eth_requestAccounts'});
+            console.log(window.ethereum);
+            this.account = window.ethereum.selectedAddress;
+            //this.metamask = window.ethereum;
+            /*
+             this.address = this.metamask.selectedAddress;
+             this.checkNetwork(this.metamask.chainId);
+             this.connectError = '';
+             this.initialAccount = false*/
+          } catch (e) {
+            //this.connectError = this.$t('recharge.recharge34');
+            console.error('连接metamask失败' + e)
+          }
+        }
       },
 
       /**
@@ -101,24 +180,104 @@
       }
     }
     .account {
-      width: 150px;
+      width: 185px;
       height: 36px;
-      margin-top: 20px;
-      background: #FFFFFF;
-      border-radius: 18px;
-      font-size: 14px;
+      margin: 20px 0 0 0;
+      font-size: 30px;
       font-family: PingFang SC;
       font-weight: 500;
-      color: #3A3C44;
+      color: #fff;
       line-height: 36px;
-      padding: 0 0 0 20px;
+      padding: 0 10px 0 20px;
+      .connection {
+        text-align: center;
+        outline: none;
+        text-decoration: none;
+        -webkit-box-pack: center;
+        justify-content: center;
+        position: relative;
+        z-index: 1;
+        font-size: 16px;
+        display: flex;
+        flex-flow: row nowrap;
+        width: 100%;
+        -webkit-box-align: center;
+        align-items: center;
+        padding: 5px;
+        border-radius: 10px;
+        cursor: pointer;
+        user-select: none;
+        font-weight: 500;
+        background-color: rgba(21, 61, 111, 0.44);
+        border: 1px solid rgba(21, 61, 111, 0.44);
+        color: #fff;
+      }
       .address {
-        width: 100px;
-        height: 34px;
+        width: 120px;
+        height: 36px;
         border: 1px solid #4A5EF2;
         border-radius: 18px;
+        font-size: 16px;
         color: #4A5EF2;
-        padding: 0 0 0 10px;
+        padding: 0 0 0 15px;
+        background-color: #fff;
+      }
+    }
+    .connect-dialog {
+      .el-dialog__header {
+        flex-flow: row nowrap;
+        padding: 1rem;
+        font-weight: 500;
+        color: inherit;
+        line-height: 0;
+      }
+      .el-dialog__body {
+        padding: 0;
+        .list {
+          background-color: rgb(247, 248, 250);
+          padding: 2rem;
+          border-bottom-left-radius: 20px;
+          border-bottom-right-radius: 20px;
+          .lis {
+            background-color: rgb(247, 248, 250);
+            outline: none;
+            border: 1px solid rgb(237, 238, 242);
+            border-radius: 12px;
+            display: flex;
+            flex-direction: row;
+            -webkit-box-align: center;
+            align-items: center;
+            -webkit-box-pack: justify;
+            justify-content: space-between;
+            padding: 1rem;
+            opacity: 1;
+            height: 80px;
+            margin-bottom: 1rem;
+            cursor: pointer;
+            &:hover {
+              border-color: #53b8a9;
+            }
+            span {
+              flex-flow: row nowrap;
+              color: rgb(0, 0, 0);
+              font-size: 1rem;
+              font-weight: 500;
+            }
+            img {
+              width: 50px;
+              float: right;
+            }
+          }
+          .lis-d {
+            cursor: default;
+            span {
+              color: #c0c4cc;
+            }
+            &:hover {
+              border-color: #edeef2;
+            }
+          }
+        }
       }
     }
   }

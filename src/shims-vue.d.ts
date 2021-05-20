@@ -1,5 +1,13 @@
 declare module '*.vue' {
-  import { DefineComponent } from 'vue'
-  const component: DefineComponent<{}, {}, any>
-  export default component
+  import Vue from 'vue';
+  export default Vue;
+}
+
+declare module '*.png'
+declare module '*.jpg'
+declare module '*.gif'
+declare module 'lodashe'
+
+declare module 'element-ui/lib/locale/lang/*' {
+  export const elementLocale: any
 }
