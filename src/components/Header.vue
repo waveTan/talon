@@ -15,7 +15,7 @@
     <div class="fr account">
       <!--<i class="el-icon-s-finance"></i>-->
       <div class="connection" v-if="!account" @click="chooseWallet">连接钱包</div>
-      <div class="fr address" v-else>{{superLong(account,5)}}</div>
+      <div class="fr click address" v-else>{{superLong(account,5)}}</div>
     </div>
     <div class="clear"></div>
 
@@ -62,7 +62,7 @@
       this.metamask = window.ethereum;
       if (this.metamask) {
         this.account = window.ethereum.selectedAddress;
-
+        this.$store.dispatch("setAccount", this.account);
         /* this.address = this.metamask.selectedAddress;
          this.listenAccountChange();
          this.listenNetworkChange()*/

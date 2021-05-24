@@ -30,7 +30,8 @@ const router = createRouter({
       path: "/liquidity",
       name: "liquidity",
       component: Liquidity,
-    }, {
+    },
+    {
       path: "/farm",
       name: "farm",
       component: Farm,

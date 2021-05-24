@@ -41,6 +41,8 @@ a.line{text-decoration:underline;}
   -o-text-overflow:ellipsis;-webkit-text-overflow:ellipsis;-moz-text-overflow:ellipsis;white-space:nowrap;}/*单行省略*/
 .ellipsis-2{display:-webkit-box;overflow:hidden;word-break:break-all;-webkit-box-orient:vertical;-webkit-line-clamp:2;}/*多行省略*/
 
+.click{cursor: pointer;}
+
 /*浮动*/
 .fl{float: left}
 .fr{float: right}
