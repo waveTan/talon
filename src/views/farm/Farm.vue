@@ -1,5 +1,7 @@
 <template>
-  <div class="w1300 farm">
+  <div class="w1300 farm" v-loading="farmLoading" element-loading-text="拼命加载中"
+       element-loading-spinner="el-icon-loading"
+       element-loading-background="rgba(0, 0, 0, 0.8)">
     <div class="top">
       <div class="fl uni isActive">Uniswap Farm</div>
       <div class="fr click talon">Talon Farm</div>
@@ -77,7 +79,7 @@
       <div class="infos">
         <div class="in">
           <span class="fl">{{addOrMinus ==='add' ? '添加':'取回'}}LP</span>
-          <label class="fr">余额：0.268</label>
+          <label class="fr">余额：{{tokenInfo.lpBalance}}</label>
         </div>
         <div class="clear"></div>
         <div class="to">
@@ -99,7 +101,7 @@
 
 <script lang="ts">
   import {ethers} from 'ethers';
-  import {divisionDecimals} from "../../api/util";
+  import {divisionDecimals, Minus, timesDecimals} from "../../api/util";
   import DetailsBar from './DetailsBar.vue'
 
   export default ({
@@ -113,7 +115,9 @@
         sortValue: '',
         mortgageValue: false,
 
+        farmLoading: true,//加载动画
         tokenList: [],//token list
+        tokenInfo: {},//弹框显示inof
 
         dialogAddOrMinus: false, //加减弹框
         formAddOrMinus: {
@@ -121,6 +125,7 @@
         },
         addOrMinus: 'add',//加减类型
         numberValue: '',//数量
+
       }
     },
     components: {
@@ -139,9 +144,11 @@
        */
       async init() {
         console.log('init');
+        this.farmLoading = true;
         let contractAddress = "0x0faee22173db311f4c57c81ec6867e5deef6c218";
         this.tokenList = await this.getTokenList(contractAddress);
         console.log(this.tokenList);
+        this.farmLoading = false;
       },
 
       /**
@@ -180,6 +187,8 @@
             totalValue: '',
             totalReward: '',
             lpToken: '',
+            lpBalance: '',
+            lpPledged: '',
             candyToken: '',
             lpDecimals: '',
             candyDecimals: '',
@@ -190,20 +199,29 @@
           tokenInfo.lpToken = poolInfoValue[0];
           tokenInfo.candyToken = poolInfoValue[1];
 
-          let pendingTokenValue = await contract.pendingToken(Number(item), this.$store.state.account);
-          tokenInfo.earnings = pendingTokenValue.toString();
           //{'lpToken','candyToken','lastRewardBlock','accPerShare','candyPerBlock','lpSupply','candyBalance'};
           //{'name','earnings','annualEarnings','totalValue','totalReward'}
           let abiTwo = [
             "function symbol() public view returns (string)",
-            "function decimals() public view returns (uint8)"
+            "function balanceOf(address account) external view returns (uint256)",
+            "function decimals() public view returns (uint8)",
           ];
           let contractTwo = new ethers.Contract(poolInfoValue[0], abiTwo, provider);
           let symbolValue = await contractTwo.symbol();
           tokenInfo.name = symbolValue.toString();
           let decimalsValue = await contractTwo.decimals();
           tokenInfo.lpDecimals = decimalsValue.toString();
+
+          let pendingTokenValue = await contract.pendingToken(Number(item), this.$store.state.account);
+          tokenInfo.earnings = divisionDecimals(pendingTokenValue.toString(), Number(tokenInfo.lpDecimals)).toString();
+
+          let userInfoValue = await contract.userInfo(Number(item), this.$store.state.account);
+          tokenInfo.lpPledged = divisionDecimals(userInfoValue[0].toString(), Number(tokenInfo.lpDecimals)).toString();
+
           tokenInfo.totalReward = divisionDecimals(poolInfoValue[6].toString(), Number(tokenInfo.lpDecimals)).toString();
+          let balanceOfValue = await contractTwo.balanceOf(this.$store.state.account);
+          tokenInfo.lpBalance = divisionDecimals(balanceOfValue.toString(), Number(tokenInfo.lpDecimals)).toString();
+
           tokenList.push(tokenInfo);
         }
         return tokenList
@@ -213,17 +231,286 @@
       openDialogAddOrMinus(tokenInfo, addOrMinus) {
         this.dialogAddOrMinus = true;
         this.addOrMinus = addOrMinus;
-        console.log(tokenInfo, 'tokenInfo');
+        this.tokenInfo = tokenInfo
       },
 
       //选择最大
       clickMax() {
-        console.log('clickMax')
+        this.numberValue = this.addOrMinus === 'add' ? this.tokenInfo.lpBalance : this.tokenInfo.lpPledged;
       },
 
       //确定提交
-      confirmAddOrMinus() {
+      async confirmAddOrMinus() {
         console.log(this.numberValue, "确定提交");
+        let contractAddress = "0x0faee22173db311f4c57c81ec6867e5deef6c218";
+        let abi = [{
+          "anonymous": false,
+          "inputs": [{"indexed": true, "internalType": "address", "name": "user", "type": "address"}, {
+            "indexed": true,
+            "internalType": "uint256",
+            "name": "pid",
+            "type": "uint256"
+          }, {"indexed": false, "internalType": "uint256", "name": "amount", "type": "uint256"}],
+          "name": "Deposit",
+          "type": "event"
+        }, {
+          "anonymous": false,
+          "inputs": [{"indexed": true, "internalType": "address", "name": "user", "type": "address"}, {
+            "indexed": true,
+            "internalType": "uint256",
+            "name": "pid",
+            "type": "uint256"
+          }, {"indexed": false, "internalType": "uint256", "name": "amount", "type": "uint256"}],
+          "name": "EmergencyWithdraw",
+          "type": "event"
+        }, {
+          "anonymous": false,
+          "inputs": [{
+            "indexed": true,
+            "internalType": "address",
+            "name": "previousOwner",
+            "type": "address"
+          }, {"indexed": true, "internalType": "address", "name": "newOwner", "type": "address"}],
+          "name": "OwnershipTransferred",
+          "type": "event"
+        }, {
+          "anonymous": false,
+          "inputs": [{"indexed": true, "internalType": "address", "name": "user", "type": "address"}, {
+            "indexed": true,
+            "internalType": "uint256",
+            "name": "pid",
+            "type": "uint256"
+          }, {"indexed": false, "internalType": "uint256", "name": "amount", "type": "uint256"}],
+          "name": "Withdraw",
+          "type": "event"
+        }, {
+          "inputs": [{
+            "internalType": "contract IERC20",
+            "name": "_lpToken",
+            "type": "address"
+          }, {"internalType": "contract IERC20", "name": "_candyToken", "type": "address"}, {
+            "internalType": "uint256",
+            "name": "_candyPerBlock",
+            "type": "uint256"
+          }, {"internalType": "uint256", "name": "_amount", "type": "uint256"}, {
+            "internalType": "bool",
+            "name": "_withUpdate",
+            "type": "bool"
+          }], "name": "add", "outputs": [], "stateMutability": "nonpayable", "type": "function"
+        }, {
+          "inputs": [{"internalType": "uint256", "name": "_pid", "type": "uint256"}, {
+            "internalType": "uint256",
+            "name": "_amount",
+            "type": "uint256"
+          }, {"internalType": "bool", "name": "_withUpdate", "type": "bool"}],
+          "name": "addCandy",
+          "outputs": [],
+          "stateMutability": "nonpayable",
+          "type": "function"
+        }, {
+          "inputs": [{"internalType": "uint256", "name": "_pid", "type": "uint256"}, {
+            "internalType": "uint256",
+            "name": "_amount",
+            "type": "uint256"
+          }], "name": "deposit", "outputs": [], "stateMutability": "nonpayable", "type": "function"
+        }, {
+          "inputs": [{"internalType": "uint256", "name": "_pid", "type": "uint256"}],
+          "name": "emergencyWithdraw",
+          "outputs": [],
+          "stateMutability": "nonpayable",
+          "type": "function"
+        }, {
+          "inputs": [{
+            "internalType": "uint256",
+            "name": "_startBlock",
+            "type": "uint256"
+          }, {"internalType": "address", "name": "_devAddr", "type": "address"}],
+          "name": "initialize",
+          "outputs": [],
+          "stateMutability": "nonpayable",
+          "type": "function"
+        }, {
+          "inputs": [],
+          "name": "massUpdatePools",
+          "outputs": [],
+          "stateMutability": "nonpayable",
+          "type": "function"
+        }, {
+          "inputs": [],
+          "name": "owner",
+          "outputs": [{"internalType": "address", "name": "", "type": "address"}],
+          "stateMutability": "view",
+          "type": "function"
+        }, {
+          "inputs": [{"internalType": "uint256", "name": "_pid", "type": "uint256"}, {
+            "internalType": "address",
+            "name": "_user",
+            "type": "address"
+          }],
+          "name": "pendingToken",
+          "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+          "stateMutability": "view",
+          "type": "function"
+        }, {
+          "inputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+          "name": "poolInfo",
+          "outputs": [{
+            "internalType": "contract IERC20",
+            "name": "lpToken",
+            "type": "address"
+          }, {"internalType": "contract IERC20", "name": "candyToken", "type": "address"}, {
+            "internalType": "uint256",
+            "name": "lastRewardBlock",
+            "type": "uint256"
+          }, {"internalType": "uint256", "name": "accPerShare", "type": "uint256"}, {
+            "internalType": "uint256",
+            "name": "candyPerBlock",
+            "type": "uint256"
+          }, {"internalType": "uint256", "name": "lpSupply", "type": "uint256"}, {
+            "internalType": "uint256",
+            "name": "candyBalance",
+            "type": "uint256"
+          }],
+          "stateMutability": "view",
+          "type": "function"
+        }, {
+          "inputs": [],
+          "name": "poolLength",
+          "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+          "stateMutability": "view",
+          "type": "function"
+        }, {
+          "inputs": [],
+          "name": "renounceOwnership",
+          "outputs": [],
+          "stateMutability": "nonpayable",
+          "type": "function"
+        }, {
+          "inputs": [{"internalType": "address", "name": "newOwner", "type": "address"}],
+          "name": "transferOwnership",
+          "outputs": [],
+          "stateMutability": "nonpayable",
+          "type": "function"
+        }, {
+          "inputs": [{"internalType": "uint256", "name": "_pid", "type": "uint256"}],
+          "name": "updatePool",
+          "outputs": [],
+          "stateMutability": "nonpayable",
+          "type": "function"
+        }, {
+          "inputs": [{"internalType": "uint256", "name": "", "type": "uint256"}, {
+            "internalType": "address",
+            "name": "",
+            "type": "address"
+          }],
+          "name": "userInfo",
+          "outputs": [{"internalType": "uint256", "name": "amount", "type": "uint256"}, {
+            "internalType": "uint256",
+            "name": "rewardDebt",
+            "type": "uint256"
+          }],
+          "stateMutability": "view",
+          "type": "function"
+        }, {
+          "inputs": [{"internalType": "uint256", "name": "_pid", "type": "uint256"}, {
+            "internalType": "uint256",
+            "name": "_amount",
+            "type": "uint256"
+          }], "name": "withdraw", "outputs": [], "stateMutability": "nonpayable", "type": "function"
+        }];
+
+        //查询是否授权
+        let allOwance = await this.getERC20Allowance('0xae7FccFF7Ec3cf126cd96678ADAE83a2b303791C', '0x0faee22173db311f4c57c81ec6867e5deef6c218', this.$store.state.account);
+        console.log(allOwance, "allOwance");
+        if (!allOwance) { //没授权先授权
+          //this.getApproveERC20Hex('0xae7FccFF7Ec3cf126cd96678ADAE83a2b303791C','0x0faee22173db311f4c57c81ec6867e5deef6c218',this.$store.state.account);
+        } else {
+          let providers = new ethers.providers.Web3Provider(window.ethereum);
+          console.log(providers);
+          let wallet = await providers.getSigner();
+          console.log(wallet);
+          let contracts = new ethers.Contract(contractAddress, abi, wallet);
+          console.log(contracts);
+          let sss = await contracts.deposit(0, Number(timesDecimals(this.numberValue, 8)));
+          console.log(sss);
+        }
+      },
+
+      /**
+       * 查询erc20资产授权额度
+       * @param contractAddress ERC20合约地址
+       * @param multySignAddress 多签地址
+       * @param address 账户eth地址
+       */
+      async getERC20Allowance(contractAddress: string, multySignAddress: string, address: string) {
+        const ERC20_ABI = [
+          "function allowance(address owner, address spender) external view returns (uint256)"
+        ];
+        let provider = new ethers.providers.Web3Provider(window.ethereum);
+        const contract = new ethers.Contract(contractAddress, ERC20_ABI, provider);
+        const allowancePromise = contract.allowance(address, multySignAddress);
+        return allowancePromise
+          .then(allowance => {
+            const baseAllowance = '39600000000000000000000000000';
+            //已授权额度小于baseAllowance，则需要授权
+            return Number(Minus(baseAllowance, allowance.toString())) >= 0;
+          })
+          .catch(e => {
+            console.error("获取erc20资产授权额度失败" + e);
+            return true;
+          });
+      },
+
+      /**
+       * 授权erc20额度
+       * @param contractAddress ERC20合约地址
+       * @param multySignAddress 多签地址
+       * @param address 账户eth地址
+       */
+      async getApproveERC20Hex(contractAddress: string, multySignAddress: string, address: string) {
+        const ERC20_ABI = [
+          "function approve(address spender, uint256 amount) external returns (bool)"
+        ];
+        let provider = new ethers.providers.Web3Provider(window.ethereum);
+        let wallet = await providers.getSigner();
+        const nonce = await wallet.getTransactionCount();
+        const gasPrice = await provider.getGasPrice();
+        const gasLimit = "100000";
+        const iface = new ethers.utils.Interface(ERC20_ABI);
+        const data = iface.functions.approve.encode([
+          multySignAddress,
+          new ethers.utils.BigNumber("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff")
+        ]);
+        const transaction = {
+          to: contractAddress,
+          from: address,
+          value: "0x00",
+          data: data,
+          nonce,
+          gasLimit: Number(gasLimit),
+          gasPrice
+        };
+        const failed = await this.validate(transaction);
+        if (failed) {
+          console.error("failed approveERC20" + failed);
+          return null;
+        }
+        delete transaction.from;
+        return await wallet.sign(transaction);
+        // delete transaction.from   //etherjs 4.0 from参数无效 报错
+        // return wallet.sendTransaction(transaction);
+      },
+
+      //验证交易参数
+      async validate(tx: any) {
+        try {
+          let provider = new ethers.providers.Web3Provider(window.ethereum);
+          console.log(provider);
+          const result = await provider.call(tx);
+          return ethers.utils.toUtf8String("0x" + result.substr(138));
+        } catch (e) {
+          return false;
+        }
       },
 
       /**

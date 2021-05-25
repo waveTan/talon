@@ -20,7 +20,7 @@
       <div class="fl alter">
         <div class="fl">
           <h6>已质押LP</h6>
-          <h5>0.888</h5>
+          <h5>{{tokenInfo.lpPledged}}</h5>
         </div>
         <div class="fr">
           <el-button class="btns" type="primary" size="small" icon="el-icon-minus" @click="minusLP(tokenInfo)">
