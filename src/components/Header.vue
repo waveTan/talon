@@ -63,12 +63,13 @@
       if (this.metamask) {
         this.account = window.ethereum.selectedAddress;
         this.$store.dispatch("setAccount", this.account);
-        /* this.address = this.metamask.selectedAddress;
-         this.listenAccountChange();
-         this.listenNetworkChange()*/
       } else {
         this.hasMetaMask = false
       }
+      setInterval(() => {
+        this.account = window.ethereum.selectedAddress;
+        this.$store.dispatch("setAccount", this.account);
+      }, 1000)
     },
     methods: {
 
@@ -98,7 +99,6 @@
        * @author: Wave
        */
       connectTo(walletName) {
-        console.log(walletName);
         if (walletName === 'MetaMast') {
           this.getAccount();
         }
@@ -109,17 +109,12 @@
         if (window.ethereum) {
           try {
             await window.ethereum.request({method: 'eth_requestAccounts'});
-            console.log(window.ethereum);
+            this.walletDialog = false;
             this.account = window.ethereum.selectedAddress;
-            //this.metamask = window.ethereum;
-            /*
-             this.address = this.metamask.selectedAddress;
-             this.checkNetwork(this.metamask.chainId);
-             this.connectError = '';
-             this.initialAccount = false*/
+            this.$store.dispatch("setAccount", this.account);
           } catch (e) {
-            //this.connectError = this.$t('recharge.recharge34');
-            console.error('连接metamask失败' + e)
+            console.error('连接metamask失败' + e);
+            this.walletDialog = false;
           }
         }
       },

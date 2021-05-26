@@ -50,7 +50,7 @@
       }
     },
     mounted() {
-      console.log(this.tokenInfo);
+      //console.log(this.tokenInfo);
     },
     methods: {
 
@@ -61,7 +61,8 @@
        * @author: Wave
        */
       gather(tokenInfo) {
-        console.log(tokenInfo)
+        //console.log(tokenInfo);
+        this.$emit('charge', tokenInfo);
       },
 
       /**

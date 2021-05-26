@@ -44,7 +44,7 @@
           <ul class="fl">
             <li class="fl">
               <p>收益</p>
-              <h2>{{item.earnings}} NULS</h2>
+              <h2>{{item.earnings}} {{item.earningsSymbol}}</h2>
             </li>
             <li class="fl">
               <p>年化收益</p>
@@ -56,16 +56,17 @@
             </li>
             <li class="fl">
               <p>剩余总奖励</p>
-              <h2>{{item.totalReward}} Talon</h2>
+              <h2>{{item.totalReward}} {{item.earningsSymbol}}</h2>
             </li>
           </ul>
-          <div class="fr click view" @click="item.showId = !item.showId">
+          <div class="fr click view" @click="showId(item)">
             详情
             <i :class="item.showId ? 'el-icon-arrow-down':'el-icon-arrow-right'"></i>
           </div>
         </div>
         <div class="clear"></div>
-        <DetailsBar :tokenInfo="item" :showId="item.showId" @openDialogAddOrMinus="openDialogAddOrMinus">
+        <DetailsBar :tokenInfo="item" :showId="item.showId" @openDialogAddOrMinus="openDialogAddOrMinus"
+                    @charge="charge">
         </DetailsBar>
         <div class="clear"></div>
       </div>
@@ -85,7 +86,7 @@
         <div class="to">
           <el-input v-model="numberValue" class="fl" placeholder="0"></el-input>
           <span class="fl click max" @click="clickMax">最大</span>
-          <span class="fr lp">NULS-ETH LP</span>
+          <span class="fr lp">{{tokenInfo.name}}</span>
         </div>
       </div>
       <template #footer>
@@ -101,6 +102,7 @@
 
 <script lang="ts">
   import {ethers} from 'ethers';
+  import {ElMessage} from 'element-plus'
   import {divisionDecimals, Minus, timesDecimals} from "../../api/util";
   import DetailsBar from './DetailsBar.vue'
 
@@ -108,6 +110,7 @@
     name: 'Farm',
     data() {
       return {
+        contractAddress: "0x0faee22173db311f4c57c81ec6867e5deef6c218",//合约地址
         sortList: [
           {value: '选项1', label: '黄金糕'},
           {value: '选项2', label: '双皮奶'},
@@ -131,8 +134,37 @@
     components: {
       DetailsBar
     },
+    computed: {
+      /*account() {
+        return this.$store.state.account;
+      }*/
+    },
     mounted() {
       this.init();
+      let setIn = setInterval(async () => {
+        let tokenList = await this.getTokenList(this.contractAddress);
+        for (let item of tokenList) {
+          for (let k of this.tokenList) {
+            if (k.pid === item.pid) {
+              k.earnings = item.earnings;
+              k.totalReward = item.totalReward;
+              k.lpPledged = item.lpPledged;
+              k.lpBalance = item.lpBalance;
+            }
+          }
+        }
+
+        //clearInterval(setIn);
+      }, 5000)
+    },
+
+    watch: {
+      /*"$store.state.app.account": function () {
+        console.log(this.$store.state.account, 'account')
+      }*/
+    },
+    beforeDestroy() {
+      //clearInterval(this.timer);
     },
     methods: {
 
@@ -143,12 +175,21 @@
        * @author: Wave
        */
       async init() {
-        console.log('init');
         this.farmLoading = true;
-        let contractAddress = "0x0faee22173db311f4c57c81ec6867e5deef6c218";
-        this.tokenList = await this.getTokenList(contractAddress);
-        console.log(this.tokenList);
+        this.tokenList = await this.getTokenList(this.contractAddress);
+        //console.log(this.tokenList);
         this.farmLoading = false;
+      },
+
+      //详情
+      showId(tokenInfo) {
+        for (let item of this.tokenList) {
+          if (item.pid === tokenInfo.pid) {
+            item.showId = !item.showId;
+          } else {
+            item.showId = false;
+          }
+        }
       },
 
       /**
@@ -180,19 +221,22 @@
         for (let item in poolLength) {
           let tokenInfo = {
             name: '',
-            earnings: '',
-            annualEarnings: '',  //APR = 365 * ( 每日出块数量 * candyPrice * candyPerBlock / candyDecimals )
+            earnings: '0',
+            earningsSymbol: '',
+            annualEarnings: '',
+            //APR = 365 * ( 每日出块数量 * candyPrice * candyPerBlock / candyDecimals )
             //除以
             //( lpPrice * lpSupply / lpDecimals )
             totalValue: '',
             totalReward: '',
             lpToken: '',
-            lpBalance: '',
-            lpPledged: '',
+            lpBalance: '0',
+            lpPledged: '0',
             candyToken: '',
             lpDecimals: '',
             candyDecimals: '',
-            showId: false
+            showId: false,
+            pid: Number(item),
           };
           let poolInfoValue = await contract.poolInfo(Number(item));
           //console.log(poolInfoValue);
@@ -206,29 +250,51 @@
             "function balanceOf(address account) external view returns (uint256)",
             "function decimals() public view returns (uint8)",
           ];
-          let contractTwo = new ethers.Contract(poolInfoValue[0], abiTwo, provider);
+          let contractTwo = new ethers.Contract(tokenInfo.lpToken, abiTwo, provider);
           let symbolValue = await contractTwo.symbol();
           tokenInfo.name = symbolValue.toString();
           let decimalsValue = await contractTwo.decimals();
           tokenInfo.lpDecimals = decimalsValue.toString();
-
-          let pendingTokenValue = await contract.pendingToken(Number(item), this.$store.state.account);
-          tokenInfo.earnings = divisionDecimals(pendingTokenValue.toString(), Number(tokenInfo.lpDecimals)).toString();
-
-          let userInfoValue = await contract.userInfo(Number(item), this.$store.state.account);
-          tokenInfo.lpPledged = divisionDecimals(userInfoValue[0].toString(), Number(tokenInfo.lpDecimals)).toString();
-
           tokenInfo.totalReward = divisionDecimals(poolInfoValue[6].toString(), Number(tokenInfo.lpDecimals)).toString();
-          let balanceOfValue = await contractTwo.balanceOf(this.$store.state.account);
-          tokenInfo.lpBalance = divisionDecimals(balanceOfValue.toString(), Number(tokenInfo.lpDecimals)).toString();
+
+          if (this.$store.state.account) {
+            let pendingTokenValue = await contract.pendingToken(Number(item), this.$store.state.account);
+            tokenInfo.earnings = divisionDecimals(pendingTokenValue.toString(), Number(tokenInfo.lpDecimals)).toString();
+
+            let userInfoValue = await contract.userInfo(Number(item), this.$store.state.account);
+            tokenInfo.lpPledged = divisionDecimals(userInfoValue[0].toString(), Number(tokenInfo.lpDecimals)).toString();
+
+            let balanceOfValue = await contractTwo.balanceOf(this.$store.state.account);
+            tokenInfo.lpBalance = divisionDecimals(balanceOfValue.toString(), Number(tokenInfo.lpDecimals)).toString();
+          }
+
+
+          let abiThree = [
+            "function decimals() public view returns (uint8)",
+          ];
+          let contractThree = new ethers.Contract(tokenInfo.candyToken, abiTwo, provider);
+          let earningsSymbol = await contractThree.symbol();
+          tokenInfo.earningsSymbol = earningsSymbol.toString();
 
           tokenList.push(tokenInfo);
         }
         return tokenList
       },
 
+      /**
+       * @disc: 获取收益
+       * @params:
+       * @date: 2021-05-25 17:22
+       * @author: Wave
+       */
+      charge(tokenInfo) {
+        this.tokenInfo = tokenInfo;
+        this.LPOperation(this.numberValue, 2)
+      },
+
       //打开加减弹框
       openDialogAddOrMinus(tokenInfo, addOrMinus) {
+        this.numberValue = "";
         this.dialogAddOrMinus = true;
         this.addOrMinus = addOrMinus;
         this.tokenInfo = tokenInfo
@@ -241,8 +307,38 @@
 
       //确定提交
       async confirmAddOrMinus() {
-        console.log(this.numberValue, "确定提交");
-        let contractAddress = "0x0faee22173db311f4c57c81ec6867e5deef6c218";
+        if (!this.numberValue) {
+          ElMessage.warning({message: '请输入正确的数量', type: 'warning', center: true});
+          return;
+        }
+
+        if (this.addOrMinus === 'add') {
+          console.log(this.tokenInfo.lpToken, this.contractAddress, this.$store.state.account);
+          //查询是否授权
+          let allOwance = await this.getERC20Allowance(this.tokenInfo.lpToken, this.contractAddress, this.$store.state.account);
+          //console.log(allOwance, "allOwance");
+          if (!allOwance) { //没授权先授权
+            let resData = await this.getApproveERC20Hex(this.tokenInfo.lpToken, this.contractAddress, this.$store.state.account);
+            //console.log("授权结果：", resData);
+            ElMessage.success({message: 'ERC20授权信息已发出，请稍等几分钟重试！', type: 'success', center: true});
+            this.dialogAddOrMinus = false;
+          } else {
+            this.LPOperation(this.numberValue, 0)
+          }
+        } else {
+          this.LPOperation(this.numberValue, 1)
+        }
+
+      },
+
+      /**
+       * @disc: 添加 、减少 lp  领取收益
+       * @params: 金额
+       * @type: 类型 0:添加 1：减少 2：领取收益
+       * @date: 2021-05-25 17:16
+       * @author: Wave
+       */
+      async LPOperation(amount: string, type: number) {
         let abi = [{
           "anonymous": false,
           "inputs": [{"indexed": true, "internalType": "address", "name": "user", "type": "address"}, {
@@ -418,21 +514,24 @@
             "type": "uint256"
           }], "name": "withdraw", "outputs": [], "stateMutability": "nonpayable", "type": "function"
         }];
-
-        //查询是否授权
-        let allOwance = await this.getERC20Allowance('0xae7FccFF7Ec3cf126cd96678ADAE83a2b303791C', '0x0faee22173db311f4c57c81ec6867e5deef6c218', this.$store.state.account);
-        console.log(allOwance, "allOwance");
-        if (!allOwance) { //没授权先授权
-          //this.getApproveERC20Hex('0xae7FccFF7Ec3cf126cd96678ADAE83a2b303791C','0x0faee22173db311f4c57c81ec6867e5deef6c218',this.$store.state.account);
-        } else {
-          let providers = new ethers.providers.Web3Provider(window.ethereum);
-          console.log(providers);
-          let wallet = await providers.getSigner();
-          console.log(wallet);
-          let contracts = new ethers.Contract(contractAddress, abi, wallet);
-          console.log(contracts);
-          let sss = await contracts.deposit(0, Number(timesDecimals(this.numberValue, 8)));
-          console.log(sss);
+        let providers = new ethers.providers.Web3Provider(window.ethereum);
+        let wallet = await providers.getSigner();
+        let contracts = new ethers.Contract(this.contractAddress, abi, wallet);
+        let resData = {};
+        if (type === 0) {
+          resData = await contracts.deposit(this.tokenInfo.pid, Number(timesDecimals(amount, 8)));
+        } else if (type === 1) {
+          resData = await contracts.withdraw(this.tokenInfo.pid, Number(timesDecimals(amount, 8)));
+        } else if (type === 2) {
+          resData = await contracts.deposit(this.tokenInfo.pid, 0);
+        }
+        console.log(resData);
+        if (resData.hash) {
+          ElMessage({message: '交易已发出，等待区块确认！', type: 'success', center: true});
+          this.dialogAddOrMinus = true;
+          if (this.dialogAddOrMinus) {
+            this.dialogAddOrMinus = false;
+          }
         }
       },
 
@@ -451,9 +550,9 @@
         const allowancePromise = contract.allowance(address, multySignAddress);
         return allowancePromise
           .then(allowance => {
-            const baseAllowance = '39600000000000000000000000000';
+            const baseAllowance = '396000000000000000';
             //已授权额度小于baseAllowance，则需要授权
-            return Number(Minus(baseAllowance, allowance.toString())) >= 0;
+            return Number(Minus(allowance.toString(), baseAllowance)) >= 0;
           })
           .catch(e => {
             console.error("获取erc20资产授权额度失败" + e);
@@ -472,7 +571,7 @@
           "function approve(address spender, uint256 amount) external returns (bool)"
         ];
         let provider = new ethers.providers.Web3Provider(window.ethereum);
-        let wallet = await providers.getSigner();
+        let wallet = await provider.getSigner();
         const nonce = await wallet.getTransactionCount();
         const gasPrice = await provider.getGasPrice();
         const gasLimit = "100000";
@@ -496,16 +595,16 @@
           return null;
         }
         delete transaction.from;
-        return await wallet.sign(transaction);
+        //return await wallet.sign(transaction);
         // delete transaction.from   //etherjs 4.0 from参数无效 报错
-        // return wallet.sendTransaction(transaction);
+        return wallet.sendTransaction(transaction);
       },
 
       //验证交易参数
       async validate(tx: any) {
         try {
           let provider = new ethers.providers.Web3Provider(window.ethereum);
-          console.log(provider);
+          //console.log(provider);
           const result = await provider.call(tx);
           return ethers.utils.toUtf8String("0x" + result.substr(138));
         } catch (e) {

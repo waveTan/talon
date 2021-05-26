@@ -11,7 +11,7 @@
     "bignumber.js": "^9.0.1",
     "copy-to-clipboard": "^3.3.1",
     "element-plus": "^1.0.2-beta.43",
-    "ethers": "^5.1.4",
+    "ethers": "4",
     "path": "^0.12.7",
     "sass": "^1.32.12",
     "vue": "^3.0.5",
