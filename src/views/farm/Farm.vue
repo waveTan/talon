@@ -1,7 +1,8 @@
 <template>
-  <div class="w1300 farm" v-loading="farmLoading" element-loading-text="拼命加载中"
+  <div class="w1300 farm" v-loading="farmLoading"
+       element-loading-text="拼命加载中"
        element-loading-spinner="el-icon-loading"
-       element-loading-background="rgba(0, 0, 0, 0.8)">
+       element-loading-background="rgba(0, 0, 0, 0.5)">
     <div class="top">
       <div class="fl uni isActive">Uniswap Farm</div>
       <div class="fr click talon">Talon Farm</div>
@@ -52,7 +53,7 @@
             </li>
             <li class="fl">
               <p>流动性总价值</p>
-              <h2>{{item.annualEarnings}}</h2>
+              <h2>${{item.totalValue}}</h2>
             </li>
             <li class="fl">
               <p>剩余总奖励</p>
@@ -103,7 +104,7 @@
 <script lang="ts">
   import {ethers} from 'ethers';
   import {ElMessage} from 'element-plus'
-  import {divisionDecimals, Minus, timesDecimals} from "../../api/util";
+  import {divisionDecimals, Minus, timesDecimals, Division, Times, tofix} from "../../api/util";
   import DetailsBar from './DetailsBar.vue'
 
   export default ({
@@ -224,9 +225,9 @@
             earnings: '0',
             earningsSymbol: '',
             annualEarnings: '',
-            //APR = 365 * ( 每日出块数量 * candyPrice * candyPerBlock / candyDecimals )
+            //APR = 365 * ( 每日出块数量  * candyPrice 1 * candyPerBlock / candyDecimals )
             //除以
-            //( lpPrice * lpSupply / lpDecimals )
+            //( lpPrice 1 * lpSupply / lpDecimals )
             totalValue: '',
             totalReward: '',
             lpToken: '',
@@ -239,7 +240,6 @@
             pid: Number(item),
           };
           let poolInfoValue = await contract.poolInfo(Number(item));
-          //console.log(poolInfoValue);
           tokenInfo.lpToken = poolInfoValue[0];
           tokenInfo.candyToken = poolInfoValue[1];
 
@@ -270,11 +270,30 @@
 
 
           let abiThree = [
-            "function decimals() public view returns (uint8)",
+            "function symbol() public view returns (string)",
+            "function decimals() public view returns (uint8)"
           ];
-          let contractThree = new ethers.Contract(tokenInfo.candyToken, abiTwo, provider);
+          let contractThree = new ethers.Contract(tokenInfo.candyToken, abiThree, provider);
           let earningsSymbol = await contractThree.symbol();
           tokenInfo.earningsSymbol = earningsSymbol.toString();
+
+          let earningsDecimals = await contractThree.decimals();
+          tokenInfo.candyDecimals = earningsDecimals.toString();
+
+          let dayNumber = 5760;//每日出块数量(86400/15=5760)
+          let candyPrice = 1;//todo 待取值
+          let lpPrice = 1;//todo 待取值
+          let c = Times(Times(dayNumber.toString(), candyPrice.toString()).toString(), poolInfoValue[4].toString()).toString();
+          //let a = 365 * (5760 * 1 * 88 / tokenInfo.candyDecimals); //365 * ( 每日出块数量  * candyPrice * candyPerBlock / candyDecimals )
+          let a = Times('365', (Division(c, tokenInfo.candyDecimals).toString())).toString();
+          //let b = 1 * 200000 / 50;  //lpPrice 1 * lpSupply / lpDecimals
+          let b = Division(Times(lpPrice.toString(), poolInfoValue[5].toString()).toString(), tokenInfo.lpDecimals).toString();
+          //APR = 365 * ( 每日出块数量  * candyPrice 1 * candyPerBlock / candyDecimals )
+          //除以
+          //( lpPrice 1 * lpSupply / lpDecimals )
+          tokenInfo.annualEarnings = tofix(Division(a.toString(), b.toString()).toString(), 2, 1);
+
+          tokenInfo.totalValue = Times(lpPrice.toString(), divisionDecimals(poolInfoValue[5], Number(tokenInfo.lpDecimals))).toString();
 
           tokenList.push(tokenInfo);
         }
